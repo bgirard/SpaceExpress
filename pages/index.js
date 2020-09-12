@@ -13,7 +13,17 @@ import {
   Button,
   SoundsProvider,
 } from "arwes";
-import { useContext, useState } from "react";
+import { useContext, useState, useEffect } from "react";
+
+function usePersistedState(key, defaultValue) {
+  const [state, setState] = React.useState(
+    () => JSON.parse(localStorage.getItem(key)) || defaultValue
+  );
+  useEffect(() => {
+    localStorage.setItem(key, JSON.stringify(state));
+  }, [key, state]);
+  return [state, setState];
+}
 
 const isServer = () => typeof window === `undefined`;
 
@@ -36,10 +46,26 @@ const mySounds = {
   },
 };
 
+const tabs = {
+  construction: () => {
+    return <>This is the construction tab</>;
+  },
+  research: () => {
+    return <>This is the research tab</>;
+  },
+  news: ({ setTab }) => {
+    return (
+      <Animation show={true} appear={true} animate>
+        {(anim) => <IntroDialog anim={anim} setTab={setTab} />}
+      </Animation>
+    );
+  },
+};
+
 const TechnologyContext = React.createContext({});
 
 function TechnologyProvider({ children }) {
-  const [techUnlocked, setTechUnlocked] = useState({});
+  const [techUnlocked, setTechUnlocked] = usePersistedState("tech", {});
   const context = {
     unlock: (techName) => {
       setTechUnlocked({ ...techUnlocked, [techName]: true });
@@ -67,8 +93,15 @@ function useTech(techName) {
   return techContext.hasTech(techName);
 }
 
-function PageWrapper({ children }) {
+function TabContainer({ tabs, selectedTab, setTab }) {
+  const Tab = tabs[selectedTab];
+  return <Tab setTab={setTab} />;
+}
+
+function Page({ children }) {
   const hasConstruction = useTech("construction");
+  const hasNews = true;
+  const [tab, setTab] = useState("news");
   return (
     <Arwes
       animate
@@ -91,10 +124,31 @@ function PageWrapper({ children }) {
           <Header>
             <>
               <>🚀 Space Express 🚀</>
-              {hasConstruction && (
-                <Animation show={true} timeout={1000} appear={true}>
+              {hasNews && (
+                <Animation show={true} appear={true} animate>
                   {(anim) => (
-                    <Button animate show={anim.entered}>
+                    <Button
+                      animate
+                      show={anim.entered}
+                      onClick={() => {
+                        setTab("news");
+                      }}
+                    >
+                      News
+                    </Button>
+                  )}
+                </Animation>
+              )}
+              {hasConstruction && (
+                <Animation show={true} appear={true} animate>
+                  {(anim) => (
+                    <Button
+                      animate
+                      show={anim.entered}
+                      onClick={() => {
+                        setTab("construction");
+                      }}
+                    >
                       Construction
                     </Button>
                   )}
@@ -112,7 +166,15 @@ function PageWrapper({ children }) {
             >
               <Frame animate show={anim.entered} level={1} corners={3}>
                 {(anim) => (
-                  <div style={{ padding: "5px" }}>{children(anim)}</div>
+                  <div style={{ padding: "5px" }}>
+                    {
+                      <TabContainer
+                        tabs={tabs}
+                        selectedTab={tab}
+                        setTab={setTab}
+                      />
+                    }
+                  </div>
                 )}
               </Frame>
             </div>
@@ -126,7 +188,7 @@ function PageWrapper({ children }) {
   );
 }
 
-function IntroDialog({ anim }) {
+function IntroDialog({ anim, setTab }) {
   const unlockConstruction = useUnlockTech("construction");
   return (
     <>
@@ -144,7 +206,14 @@ function IntroDialog({ anim }) {
         But today you will start with a small step. Build a prototype rocket to
         gain research points and raise additional funding.
       </p>
-      <Button animate show={true} onClick={unlockConstruction}>
+      <Button
+        animate
+        show={true}
+        onClick={() => {
+          unlockConstruction();
+          setTab("construction");
+        }}
+      >
         Start Construction
       </Button>
     </>
@@ -159,7 +228,7 @@ export default function Home() {
     <ThemeProvider theme={createTheme()}>
       <SoundsProvider sounds={createSounds(mySounds)}>
         <TechnologyProvider>
-          <PageWrapper>{(anim) => <IntroDialog anim={anim} />}</PageWrapper>
+          <Page></Page>
         </TechnologyProvider>
       </SoundsProvider>
     </ThemeProvider>
